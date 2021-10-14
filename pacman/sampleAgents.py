@@ -32,6 +32,7 @@ import api
 import random
 import game
 import util
+import math
 
 # RandomAgent
 #
@@ -111,10 +112,92 @@ class GoWestAgent(Agent):
 class HungryAgent(Agent):
     #Create a variable to hold food locations and self location
     def __init__(self):
+        self.last = Directions.STOP
+        pick = Directions.STOP
+        
+    def getAction(self, state):
         location = api.whereAmI(state)
         foods = api.food(state)
-    def getAction(self, state):
         
+        # # If there are no food targetted
+        # if target != (-1, -1):
+        #     # Calculate the closest food
+            
+        
+        # # target already defined
+        # else:
+        #     target = target
+
+        # Define target, closest food
+        closest_coordinate = (0,0)
+        closest_distance = 10000
+        for food in foods:
+            distance = math.sqrt( ((food[0]-location[0]) **2) + ((food[1]-location[1]) **2))
+            if distance < closest_distance:
+                closest_coordinate = food
+                closest_distance = distance
+
+        target = closest_coordinate    
+
+        hor = target[0] - location[0]
+        ver = target[1] - location[1]
+        
+        if hor > 0:
+            if ver > 0:
+                moves = [Directions.EAST, Directions.NORTH]
+            elif ver < 0:
+                moves = [Directions.EAST, Directions.SOUTH]
+            else:
+                moves = [Directions.EAST]
+        elif hor < 0:
+            if ver > 0:
+                moves = [Directions.WEST, Directions.NORTH]
+            elif ver < 0:
+                moves = [Directions.WEST, Directions.SOUTH]
+            else:
+                moves = [Directions.WEST]
+        else:
+            if ver > 0:
+                moves = [Directions.NORTH]
+            elif ver < 0:
+                moves = [Directions.SOUTH]
+            else:
+                moves = [Directions.STOP]
+
+        # Where is Pacman?
+        pacman = api.whereAmI(state)
+        print "Pacman position: ", pacman
+
+        # What is the target?
+        print "target location: ", target
+
+        # What are the current moves available
+        legal = api.legalActions(state)
+        print "Legal moves: ", legal
+
+        wanted_legal = [move for move in moves if move in legal]
+        if wanted_legal:
+            pick = random.choice(wanted_legal)
+            self.last = pick
+        else:
+            pick = random.choice(legal)
+            self.last = pick
+
+        print "Wanted moves: ", moves
+
+        
+        print "choices: ", wanted_legal
+
+        print ""
+        
+
+        return api.makeMove(pick, legal)
+
+
+# Survival Agent
+# Uses information about the location of the ghosts to try to stay alive as long as possible. 
+# class SurvivalAgent(Agent):
+
 
 # SensingAgent
 #
