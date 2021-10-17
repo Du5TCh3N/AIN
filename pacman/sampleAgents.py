@@ -198,6 +198,9 @@ class HungryAgent(Agent):
 # Uses information about the location of the ghosts to try to stay alive as long as possible. 
 # class SurvivalAgent(Agent):
 
+# Corner Seeking Agent
+# Find the 4 corners, use them to guide Pacman
+class CornerSeekingAgent(Agent): 
 
 # SensingAgent
 #
