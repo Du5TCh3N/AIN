@@ -201,6 +201,127 @@ class HungryAgent(Agent):
 # Corner Seeking Agent
 # Find the 4 corners, use them to guide Pacman
 class CornerSeekingAgent(Agent): 
+    def __init__(self):
+        self.corners_list = []
+        self.target = (-1,-1)
+        self.last = Directions.STOP
+    def getAction(self, state):
+        location = api.whereAmI(state)
+        if location == self.target:
+            self.target = (-1, -1)
+        foods = api.food(state)
+        # If corners_list is not empty:
+        # check if any corner have been reached
+        if self.corners_list:
+            if location in self.corners_list:
+                self.corners_list.remove(location)
+        # If corners_list is empty:
+        # Add corners to corners_list
+        else: 
+            self.corners_list = api.corners(state)
+        
+        # If there is no target
+        if self.target == (-1, -1):
+            # Find the nearest food and set it as target
+            if foods:
+                closest_coordinate = (0,0)
+                closest_distance = 10000
+                for food in foods:
+                    distance = math.sqrt( ((food[0]-location[0]) **2) + ((food[1]-location[1]) **2))
+                    if distance < closest_distance:
+                        closest_coordinate = food
+                        closest_distance = distance
+
+                self.target = closest_coordinate    
+            # No food nearby, set corner to be closest corner
+            else: 
+                # closest_coordinate = (0,0)
+                # closest_distance = 10000
+                # for corner in self.corners_list:
+                #     distance = math.sqrt( ((corner[0]-location[0]) **2) + ((corner[1]-location[1]) **2))
+                #     if distance < closest_distance:
+                #         closest_coordinate = corner
+                #         closest_distance = distance
+                # target = closest_coordinate
+                self.target = self.corners_list[0] # choose the first element
+                self.corners_list.append(self.corners_list.pop(0)) # move the element to the end of the list
+        else:
+            if self.target in self.corners_list:
+                # Find the nearest food and set it as target
+                if foods:
+                    closest_coordinate = (0,0)
+                    closest_distance = 10000
+                    for food in foods:
+                        distance = math.sqrt( ((food[0]-location[0]) **2) + ((food[1]-location[1]) **2))
+                        if distance < closest_distance:
+                            closest_coordinate = food
+                            closest_distance = distance
+
+                    self.target = closest_coordinate    
+            else:
+                self.target = self.target 
+
+        hor = self.target[0] - location[0]
+        ver = self.target[1] - location[1]
+            
+        if hor > 0:
+            if ver > 0:
+                moves = [Directions.EAST, Directions.NORTH]
+            elif ver < 0:
+                moves = [Directions.EAST, Directions.SOUTH]
+            else:
+                moves = [Directions.EAST]
+        elif hor < 0:
+            if ver > 0:
+                moves = [Directions.WEST, Directions.NORTH]
+            elif ver < 0:
+                moves = [Directions.WEST, Directions.SOUTH]
+            else:
+                moves = [Directions.WEST]
+        else:
+            if ver > 0:
+                moves = [Directions.NORTH]
+            elif ver < 0:
+                moves = [Directions.SOUTH]
+            else:
+                moves = [Directions.STOP]
+
+        
+        legal = api.legalActions(state)
+        if Directions.STOP in legal:
+            legal.remove(Directions.STOP)
+        
+        wanted_legal = [move for move in moves if move in legal]
+
+        
+        if wanted_legal:
+            pick = random.choice(wanted_legal)
+            
+        else:
+            if self.last in legal:
+                pick = self.last
+            else:
+                pick = random.choice(legal)
+                self.last = pick
+        
+        if self.last in legal:
+            if self.last == Directions.NORTH and pick == Directions.SOUTH:
+                pick = self.last
+            elif self.last == Directions.SOUTH and pick == Directions.NORTH:
+                pick = self.last
+            elif self.last == Directions.EAST and pick == Directions.WEST:
+                pick = self.last
+            elif self.last == Directions.WEST and pick == Directions.EAST:
+                pick = self.last
+        else:
+            self.last = pick
+
+        print(location, self.target, pick, self.last, wanted_legal, foods)
+        # raw_input("Press enter to continue")
+        return api.makeMove(pick, legal)
+        
+        
+
 
 # SensingAgent
 #
