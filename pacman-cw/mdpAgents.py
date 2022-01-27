@@ -107,10 +107,10 @@ class MDPAgent(Agent):
         self.empty_reward = -5.0
         self.current_reward = -5.0
         # Number of iterations taken for value iteration
-        self.iteration = 200
+        self.iteration = 500
         # The base reward and gamma used for the Bellman Equation
-        self.reward = 0.2
-        self.gamma = 0.5
+        self.reward = 0.0
+        self.gamma = 0.9
 
     # Gets run after an MDPAgent object is created and once there is
     # game state to access.
@@ -413,6 +413,381 @@ class MDPAgent(Agent):
 
         # self.map.prettyDisplay()
         # Make the move
+        if best_move == "north_util":
+            self.last = Directions.NORTH
+        elif best_move == "south_util":
+            self.last = Directions.SOUTH
+        elif best_move == "west_util":
+            self.last = Directions.WEST
+        elif best_move == "east_util":
+            self.last = Directions.EAST
+        # Random choice between the legal options.
+        # raw_input("Press enter to continue...")
+        return api.makeMove(self.last, legal)
+
+
+class MDPAgent1(Agent):
+
+    # Constructor: this gets run when we first invoke pacman.py
+    def __init__(self):
+        print "Starting up MDPAgent!"
+        name = "Pacman"
+
+        self.last = Directions.STOP
+
+        self.traveled = []
+        self.food_locations = []
+        self.wall_locations = []
+        self.capsule_locations = []
+
+        self.food_reward = 10.0
+        self.capsule_reward = 100.0
+        self.ghost_reward = -1000.0
+        self.near_ignore_ghost_reward = 10.0
+        self.ignore_ghost_reward = 10.0
+        self.empty_reward = -0.5
+        self.current_reward = -5.0
+
+        self.iteration = 500
+        self.reward = -0.5
+        self.gamma = 0.9
+
+    # Gets run after an MDPAgent object is created and once there is
+    # game state to access.
+    def registerInitialState(self, state):
+        print "Running registerInitialState for MDPAgent!"
+        print "I'm at:"
+        print api.whereAmI(state)
+
+        self.makeMap(state)
+        self.addWallsToMap(state)
+
+    # This is what gets run in between multiple games
+    def final(self, state):
+        print "Looks like the game just ended!"
+
+        self.traveled = []
+        self.food_locations = []
+        self.wall_locations = []
+        self.capsule_locations = []
+
+    def getMapDimension(self, corners):
+        height = -1
+        for i in range(len(corners)):
+            if corners[i][1] > height:
+                height = corners[i][1]
+
+        width = -1
+        for i in range(len(corners)):
+            if corners[i][0] > width:
+                width = corners[i][0]
+        return width + 1, height + 1
+
+    def makeMap(self, state):
+        corners = api.corners(state)
+        width, height = self.getMapDimension(corners)
+        self.map = Grid(width, height)
+
+    def addWallsToMap(self, state):
+        walls = api.walls(state)
+        for wall in walls:
+            self.map.setValue(wall[0], wall[1], "%")
+
+    def getSides(self, direction, north, south, east, west):
+        if direction == north:
+            return east, west
+        elif direction == south:
+            return west, east
+        elif direction == east:
+            return north, south
+        elif direction == west:
+            return south, north
+
+    def makeValueMap(self, state):
+        foods = api.food(state)
+        walls = api.walls(state)
+        capsules = api.capsules(state)
+        ghosts = api.ghostStates(state)
+        current_location = api.whereAmI(state)
+        corners = api.corners(state)
+
+        valueMap = {}
+
+        if current_location not in self.traveled:
+            self.traveled.append(current_location)
+
+        for food in foods:
+            if food not in self.food_locations:
+                self.food_locations.append(food)
+        self.food_dictionary = dict.fromkeys(
+            self.food_locations, self.food_reward)
+        valueMap.update(self.food_dictionary)
+
+        for capsule in capsules:
+            if capsule not in self.capsule_locations:
+                self.capsule_locations.append(capsule)
+        self.capsule_dictionary = dict.fromkeys(
+            self.capsule_locations, self.capsule_reward)
+        valueMap.update(self.capsule_dictionary)
+
+        for wall in walls:
+            if wall not in self.wall_locations:
+                self.wall_locations.append(wall)
+        self.wall_dictionary = dict.fromkeys(self.wall_locations, "%")
+        valueMap.update(self.wall_dictionary)
+
+        width, height = self.getMapDimension(corners)
+        for i in range(width-1):
+            for j in range(height-1):
+                if (i, j) not in valueMap.keys():
+                    valueMap[(i, j)] = self.empty_reward
+
+        for food in self.food_locations:
+            if food in self.traveled:
+                valueMap[food] = self.empty_reward
+
+        for capsule in self.capsule_locations:
+            if capsule in self.traveled:
+                valueMap[capsule] = self.empty_reward
+
+        for ghost in ghosts:
+            for location in valueMap.keys():
+                if ghost[0] == location:
+                    if ghost[1] != 1:
+                        valueMap[ghost] = self.ghost_reward
+                    else:
+                        valueMap[ghost] = self.ignore_ghost_reward
+
+        valueMap[current_location] = self.current_reward
+
+        return valueMap
+
+    def getTransition(self, x, y, valueMap):
+        self.util_dict = {"north_util": 0.0, "south_util": 0.0,
+                          "east_util": 0.0, "west_util": 0.0}
+
+        self.valueMap = valueMap
+
+        self.x = x
+        self.y = y
+
+        north = (self.x, self.y + 1)
+        south = (self.x, self.y - 1)
+        east = (self.x + 1, self.y)
+        west = (self.x - 1, self.y)
+        current = (self.x, self.y)
+
+        directions = [north, south, east, west]
+
+        for direction in directions:
+            directionL, directionR = self.getSides(
+                direction, north, south, east, west)
+            util = 0
+            if self.valueMap[direction] != "%":
+                util += (0.8 * self.valueMap[direction])
+            else:
+                util += (0.8 * self.valueMap[current])
+            if self.valueMap[directionL] != "%":
+                util += (0.1 * self.valueMap[directionL])
+            else:
+                util += (0.1 * self.valueMap[current])
+            if self.valueMap[directionR] != "%":
+                util += (0.1 * self.valueMap[directionR])
+            else:
+                util += (0.1 * self.valueMap[current])
+
+            if direction == north:
+                self.util_dict['north_util'] = util
+            elif direction == south:
+                self.util_dict['south_util'] = util
+            elif direction == west:
+                self.util_dict['west_util'] = util
+            elif direction == east:
+                self.util_dict['east_util'] = util
+
+        self.valueMap[current] = max(self.util_dict.values())
+
+        return self.valueMap[current]
+
+    def valueIteration(self, state, reward, gamma, V1):
+        walls = api.walls(state)
+        foods = api.food(state)
+        capsules = api.capsules(state)
+        ghosts = api.ghosts(state)
+
+        ghostsStates = api.ghostStatesWithTimes(state)
+        corners = api.corners(state)
+
+        width, height = self.getMapDimension(corners)
+
+        near_ghosts = []
+        ghost_location = []
+        if width >= 8 or height >= 8:
+            for ghost in ghostsStates:
+                ghost_location.append(ghost[0])
+                for i in range(-3, 4, 1):
+                    for j in range(-3, 4, 1):
+                        near_ghost = (int(ghost[0][0]+i), int(ghost[0][1]+j))
+                        if near_ghost in V1:
+                            if ghost[1] == 0:
+                                if i == 0 and j == 0:
+                                    V1[near_ghost] = self.ghost_reward
+                                elif abs(i) + abs(j) == 1 and near_ghost not in ghost_location:
+                                    if near_ghost in near_ghosts:
+                                        V1[near_ghost] = max(
+                                            self.ghost_reward / 2, V1[near_ghost])
+                                    else:
+                                        V1[near_ghost] = self.ghost_reward / 2
+                                elif abs(i) + abs(j) == 2 and near_ghost not in ghost_location:
+                                    if near_ghost in near_ghosts:
+                                        V1[near_ghost] = max(
+                                            self.ghost_reward / 3, V1[near_ghost])
+                                    else:
+                                        V1[near_ghost] = self.ghost_reward / 3
+                                elif abs(i) + abs(j) == 3 and near_ghost not in ghost_location:
+                                    if near_ghost in near_ghosts:
+                                        V1[near_ghost] = max(
+                                            self.ghost_reward / 4, V1[near_ghost])
+                                    else:
+                                        V1[near_ghost] = self.ghost_reward / 4
+                                elif abs(i) + abs(j) == 4 and near_ghost not in ghost_location:
+                                    if near_ghost in near_ghosts:
+                                        V1[near_ghost] = max(
+                                            self.ghost_reward / 5, V1[near_ghost])
+                                    else:
+                                        V1[near_ghost] = self.ghost_reward / 5
+                                near_ghosts.append(near_ghost)
+                            else:
+                                if i == 0 and j == 0:
+                                    V1[near_ghost] = self.ignore_ghost_reward
+        else:
+            for ghost in ghostsStates:
+                ghost_location.append(ghost[0])
+                for i in range(-1, 2, 1):
+                    for j in range(-1, 2, 1):
+                        near_ghost = (int(ghost[0][0]+i), int(ghost[0][1]+j))
+                        if ghost[1] == 0:
+                            if i == 0 and j == 0:
+                                V1[near_ghost] = self.ghost_reward
+                            elif abs(i) + abs(j) == 1 and near_ghost not in ghost_location:
+                                if near_ghost in near_ghosts:
+                                    V1[near_ghost] = max(
+                                        self.ghost_reward / 2, V1[near_ghost])
+                                else:
+                                    V1[near_ghost] = self.ghost_reward / 2
+                            elif abs(i) + abs(j) == 2 and near_ghost not in ghost_location:
+                                if near_ghost in near_ghosts:
+                                    V1[near_ghost] = max(
+                                        self.ghost_reward / 3, V1[near_ghost])
+                                else:
+                                    V1[near_ghost] = self.ghost_reward / 3
+                            elif abs(i) + abs(j) == 3 and near_ghost not in ghost_location:
+                                if near_ghost in near_ghosts:
+                                    V1[near_ghost] = max(
+                                        self.ghost_reward / 4, V1[near_ghost])
+                                else:
+                                    V1[near_ghost] = self.ghost_reward / 4
+                            elif abs(i) + abs(j) == 4 and near_ghost not in ghost_location:
+                                if near_ghost in near_ghosts:
+                                    V1[near_ghost] = max(
+                                        self.ghost_reward / 5, V1[near_ghost])
+                                else:
+                                    V1[near_ghost] = self.ghost_reward / 5
+                            near_ghosts.append(near_ghost)
+                        else:
+                            if i == 0 and j == 0:
+                                V1[near_ghost] = self.ignore_ghost_reward
+
+        for n in range(self.iteration):
+            V = V1.copy()
+            for i in range(width-1):
+                for j in range(height-1):
+                    if (i, j) not in walls and (i, j) not in foods and (i, j) not in ghosts and (i, j) not in near_ghosts and (i, j) not in capsules:
+                        V1[(i, j)] = reward + gamma * \
+                            self.getTransition(i, j, V)
+
+            n += 1
+
+    def getPolicy(self, state, iteratedMap):
+        current_location = api.whereAmI(state)
+
+        self.valueMap = iteratedMap
+
+        x = current_location[0]
+        y = current_location[1]
+
+        self.util_dict = {"north_util": 0.0, "south_util": 0.0,
+                          "east_util": 0.0, "west_util": 0.0}
+
+        north = (x, y + 1)
+        south = (x, y - 1)
+        east = (x + 1, y)
+        west = (x - 1, y)
+        current = (x, y)
+
+        directions = [north, south, east, west]
+
+        for direction in directions:
+            directionL, directionR = self.getSides(
+                direction, north, south, east, west)
+            util = 0
+            if self.valueMap[direction] != "%":
+                util += (0.8 * self.valueMap[direction])
+                # print direction
+                # print self.valueMap[direction]
+            else:
+                util += (0.8 * self.valueMap[current])
+                # print current
+                # print self.valueMap[current]
+            if self.valueMap[directionL] != "%":
+                util += (0.1 * self.valueMap[directionL])
+                # print directionL
+                # print self.valueMap[directionL]
+            else:
+                util += (0.1 * self.valueMap[current])
+                # print current
+                # print self.valueMap[current]
+            if self.valueMap[directionR] != "%":
+                util += (0.1 * self.valueMap[directionR])
+                # print directionR
+                # print self.valueMap[directionR]
+            else:
+                util += (0.1 * self.valueMap[current])
+                # print current
+                # print self.valueMap[current]
+
+            if direction == north:
+                self.util_dict['north_util'] = util
+            elif direction == south:
+                self.util_dict['south_util'] = util
+            elif direction == west:
+                self.util_dict['west_util'] = util
+            elif direction == east:
+                self.util_dict['east_util'] = util
+
+        maxExpectedUtility = max(self.util_dict.values())
+        # print(self.util_dict)
+        return self.util_dict.keys()[self.util_dict.values().index(maxExpectedUtility)]
+
+    # For now I just move randomly
+    def getAction(self, state):
+        # Get the actions we can try, and remove "STOP" if that is one of them.
+        # print "-" * 20
+        legal = api.legalActions(state)
+        valueMap = self.makeValueMap(state)
+
+        self.valueIteration(state, self.reward, self.gamma, valueMap)
+
+        best_move = self.getPolicy(state, valueMap)
+        # print "best move:", best_move
+
+        for i in range(self.map.getWidth()):
+            for j in range(self.map.getHeight()):
+                if self.map.getValue(i, j) != "%":
+                    self.map.setValue(i, j, valueMap[(i, j)])
+
+        # self.map.prettyDisplay()
+
         if best_move == "north_util":
             self.last = Directions.NORTH
         elif best_move == "south_util":
